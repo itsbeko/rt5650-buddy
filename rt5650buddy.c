@@ -259,7 +259,7 @@ NTSTATUS RtEvtPrepareHardware(WDFDEVICE dev, WDFCMRESLIST raw, WDFCMRESLIST tran
     }
 
     RtlInitEmptyUnicodeString(&path, pathBuf, sizeof(pathBuf));
-    st = RESOURCE_HUB_CREATE_PATH_FROM_ID(&path, ctx->ConnectionId.LowPart, ctx->ConnectionId.HighPart);
+    st = RtlUnicodeStringPrintf(&path, L"\\Device\\RESOURCE_HUB\\%0*I64x", (int)(sizeof(LARGE_INTEGER) * 2), ctx->ConnectionId.QuadPart);
     if (!NT_SUCCESS(st)) return st;
 
     st = WdfIoTargetCreate(dev, WDF_NO_OBJECT_ATTRIBUTES, &ctx->I2c);
