@@ -1,0 +1,54 @@
+;
+; rt5650buddy.inf - configuration du codec Realtek RT5650 (Acer Chromebase 24 / BUDDY)
+;
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = MEDIA
+ClassGuid   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider    = %Prov%
+CatalogFile = rt5650buddy.cat
+DriverVer   = 11/09/2026,1.0.0.1
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[SourceDisksNames]
+1 = %Disk%,,,""
+
+[SourceDisksFiles]
+rt5650buddy.sys = 1,,
+
+[Manufacturer]
+%Prov% = Std,NTamd64
+
+[Std.NTamd64]
+%Desc% = RT5650_Inst, ACPI\10EC5650
+
+[RT5650_Inst.NT]
+CopyFiles = RT5650_Files
+
+[RT5650_Files]
+rt5650buddy.sys
+
+[RT5650_Inst.NT.Services]
+AddService = rt5650buddy, 0x00000002, RT5650_Svc
+
+[RT5650_Svc]
+DisplayName   = %SvcDesc%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\rt5650buddy.sys
+
+[RT5650_Inst.NT.Wdf]
+KmdfService = rt5650buddy, RT5650_Wdf
+
+[RT5650_Wdf]
+KmdfLibraryVersion = 1.15
+
+[Strings]
+Prov    = "Pont"
+Disk    = "RT5650 Buddy"
+Desc    = "Realtek RT5650 (Chromebase BUDDY)"
+SvcDesc = "Realtek RT5650 codec (Chromebase BUDDY)"

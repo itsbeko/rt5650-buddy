@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lister les kits Windows
+        shell: pwsh
+        run: |
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" | Select-Object Name
+          Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\*\km\wdm.h"
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Compiler
+        shell: pwsh
+        run: msbuild rt5650buddy.vcxproj /p:Configuration=Release /p:Platform=x64 /v:minimal
+
+      - name: Signer (certificat de test) et creer le catalogue
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $kit = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Directory | Where-Object { $_.Name -match '^10\.' } | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          $signtool = Join-Path $kit "x64\signtool.exe"
+          $inf2cat = Join-Path $kit "x86\inf2cat.exe"
+          if (-not (Test-Path $inf2cat)) { $inf2cat = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter inf2cat.exe | Select-Object -First 1).FullName }
+          New-Item -ItemType Directory -Force out | Out-Null
+          $sys = Get-ChildItem -Recurse -Filter rt5650buddy.sys | Where-Object { $_.FullName -notmatch '\\out\\' } | Select-Object -First 1
+          Copy-Item $sys.FullName out\
+          Copy-Item rt5650buddy.inf out\
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Pont RT5650 Test" -CertStoreLocation Cert:\CurrentUser\My -HashAlgorithm sha256 -NotAfter (Get-Date).AddYears(10)
+          Export-Certificate -Cert $cert -FilePath out\pont-test.cer | Out-Null
+          & $signtool sign /fd sha256 /sha1 $cert.Thumbprint out\rt5650buddy.sys
+          & $inf2cat /driver:out /os:10_X64 /uselocaltime
+          & $signtool sign /fd sha256 /sha1 $cert.Thumbprint out\rt5650buddy.cat
+          Get-ChildItem out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rt5650buddy
+          path: out/
