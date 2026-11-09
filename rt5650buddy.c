@@ -16,6 +16,7 @@
 #include <ntddk.h>
 #include <wdf.h>
 #include <spb.h>
+#include <ntstrsafe.h>
 #include <reshub.h>
 
 #define RT_TAG 'ltRB'
