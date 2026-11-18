@@ -13,6 +13,8 @@ Un pilote KMDF minimal qui configure en I²C le codec Realtek **RT5650** de la c
 
 [English](README.md) · **Français**
 
+⚠️ **Nécessite le mode test de Windows :** voir [Installation](#-installation)
+
 </div>
 
 ---
@@ -73,18 +75,29 @@ Les valeurs de registres sont reprises des pilotes Linux [`rt5645.c`](https://gi
 
 ## 📦 Installation
 
-> [!WARNING]
-> Le pilote est signé avec un **certificat de test** : Windows doit donc tourner en **mode test**. C'est du code noyau, tu l'utilises à tes risques.
+> [!CAUTION]
+> **Windows DOIT être en mode test (`testsigning on`). Sans ça, le pilote ne se charge pas.**
+>
+> Le pilote est signé avec un **certificat de test**, pas par Microsoft. Hors mode test, Windows refuse de le charger et le périphérique affiche le **code 52** (« impossible de vérifier la signature numérique »). Il n'y a aucun contournement : pas de mode test, pas de son.
+>
+> - Le mode test ne peut s'activer que si le **Secure Boot est désactivé** dans le firmware.
+> - Le filigrane *« Mode test »* s'affiche ensuite en bas à droite du bureau. C'est normal.
+> - C'est du code noyau, tu l'utilises à tes risques.
 
-**Prérequis :** le [pilote CoolStar SST](https://coolstar.org/chromebook/windows-install.html) est installé et son périphérique démarre sans erreur.
+**Prérequis :**
+
+- le [pilote CoolStar SST](https://coolstar.org/chromebook/windows-install.html) est installé et son périphérique démarre sans erreur ;
+- le **Secure Boot est désactivé** et le **mode test est activé** (étape 2).
 
 **1. Télécharge** l'artefact `rt5650buddy` du [dernier build réussi](https://github.com/itsbeko/rt5650-buddy/actions/workflows/build.yml) et décompresse-le. Il contient `rt5650buddy.sys`, `.inf`, `.cat` et `pont-test.cer`.
 
-**2. Active la signature de test**, puis redémarre :
+**2. Active le mode test (obligatoire).** Lance ceci dans une invite administrateur, puis **redémarre** :
 
 ```powershell
 bcdedit /set testsigning on
 ```
+
+Après le redémarrage, vérifie que le filigrane *« Mode test »* apparaît sur le bureau. Si `bcdedit` répond *« La valeur est protégée par la stratégie de démarrage sécurisé »*, désactive d'abord le Secure Boot.
 
 **3. Fais confiance au certificat de test.** Lance ceci dans un PowerShell administrateur :
 
@@ -149,6 +162,7 @@ Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\ACPI\10EC5650\*\Device Par
 | `InitStep` | `InitStatus` | Signification |
 |:---:|---|---|
 | **37** | `0x00000000` | ✅ Tout va bien : le codec est entièrement configuré |
+| *(aucune valeur)* | | Le pilote ne s'est jamais chargé. Le Gestionnaire de périphériques affiche le **code 52** : **le mode test n'est pas actif**, voir [Installation](#-installation), étape 2 |
 | 0 | `0xC000009A` | Aucune ressource I²C dans l'ACPI (mauvais périphérique ou `_CRS` absent) |
 | 0 | autre erreur | Impossible d'ouvrir le contrôleur I²C (le pilote Intel I²C / Serial IO est-il installé ?) |
 | 1 | `0xC0000182` | La puce répond mais ce n'est pas un RT5650 (`DeviceId` ≠ `0x6419`) |
@@ -168,7 +182,7 @@ Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\ACPI\10EC5650\*\Device Par
 ```powershell
 pnputil /enum-drivers | Select-String -Context 1,4 rt5650buddy   # trouver le nom oemXX.inf
 pnputil /delete-driver oemXX.inf /uninstall
-bcdedit /set testsigning off                                     # optionnel, puis redémarrer
+bcdedit /set testsigning off                                     # seulement une fois le pilote retiré, puis redémarrer
 ```
 
 ## 🙏 Remerciements

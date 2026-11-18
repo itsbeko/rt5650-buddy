@@ -13,6 +13,8 @@ A minimal KMDF driver that configures the Realtek **RT5650** codec on the Google
 
 **English** · [Français](README.fr.md)
 
+⚠️ **Requires Windows test mode:** see [Installation](#-installation)
+
 </div>
 
 ---
@@ -73,18 +75,29 @@ Register values are ported from the Linux drivers [`rt5645.c`](https://github.co
 
 ## 📦 Installation
 
-> [!WARNING]
-> The driver is signed with a **test certificate**, so Windows must run in **test mode**. It is kernel-mode code: use it at your own risk.
+> [!CAUTION]
+> **Windows MUST be in test mode (`testsigning on`). Without it, this driver will not load.**
+>
+> The driver is signed with a **test certificate**, not by Microsoft. Outside test mode, Windows refuses to load it and the device shows **Code 52** ("cannot verify the digital signature"). There is no way around this: no test mode, no sound.
+>
+> - Turning on test mode requires **Secure Boot to be disabled** in the firmware.
+> - A *"Test Mode"* watermark then appears in the bottom-right corner of the desktop. That is expected.
+> - This is kernel-mode code: use it at your own risk.
 
-**Prerequisite:** the [CoolStar SST driver](https://coolstar.org/chromebook/windows-install.html) is installed and its device starts without errors.
+**Prerequisites:**
+
+- the [CoolStar SST driver](https://coolstar.org/chromebook/windows-install.html) is installed and its device starts without errors;
+- **Secure Boot is off** and **test mode is on** (step 2).
 
 **1. Download** the `rt5650buddy` artifact from the [latest successful build](https://github.com/itsbeko/rt5650-buddy/actions/workflows/build.yml) and unzip it. It contains `rt5650buddy.sys`, `.inf`, `.cat` and `pont-test.cer`.
 
-**2. Enable test signing**, then reboot:
+**2. Enable test mode (required).** Run this in an elevated prompt, then **reboot**:
 
 ```powershell
 bcdedit /set testsigning on
 ```
+
+After the reboot, check that the *"Test Mode"* watermark shows on the desktop. If `bcdedit` says *"The value is protected by Secure Boot policy"*, disable Secure Boot first.
 
 **3. Trust the test certificate.** Run this in an elevated PowerShell:
 
@@ -149,6 +162,7 @@ Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\ACPI\10EC5650\*\Device Par
 | `InitStep` | `InitStatus` | Meaning |
 |:---:|---|---|
 | **37** | `0x00000000` | ✅ Everything is fine: the codec is fully configured |
+| *(no values)* | | The driver never loaded. Device Manager shows **Code 52**: **test mode is off**, see [Installation](#-installation) step 2 |
 | 0 | `0xC000009A` | No I²C resource in ACPI (wrong device, or missing `_CRS`) |
 | 0 | other error | Could not open the I²C controller (is the Intel I²C / Serial IO driver installed?) |
 | 1 | `0xC0000182` | The chip answered but is not an RT5650 (`DeviceId` ≠ `0x6419`) |
@@ -168,7 +182,7 @@ Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Enum\ACPI\10EC5650\*\Device Par
 ```powershell
 pnputil /enum-drivers | Select-String -Context 1,4 rt5650buddy   # find the oemXX.inf name
 pnputil /delete-driver oemXX.inf /uninstall
-bcdedit /set testsigning off                                     # optional, then reboot
+bcdedit /set testsigning off                                     # only once the driver is removed, then reboot
 ```
 
 ## 🙏 Credits
