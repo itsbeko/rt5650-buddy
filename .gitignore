@@ -1,3 +1,16 @@
+# Sorties de build
 out/
-*.obj
 x64/
+Release/
+Debug/
+*.obj
+*.pdb
+*.sys
+*.cat
+*.cer
+*.log
+*.tlog/
+
+# Visual Studio
+.vs/
+*.user

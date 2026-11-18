@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * rt5650buddy - pilote KMDF minimal pour le codec Realtek RT5650 de l'Acer
  * Chromebase 24 (carte Google BUDDY, Broadwell), sous Windows 10.
@@ -300,7 +301,7 @@ NTSTATUS RtEvtD0Exit(WDFDEVICE dev, WDF_POWER_DEVICE_STATE target)
     PDEVICE_CONTEXT ctx = GetCtx(dev);
     UNREFERENCED_PARAMETER(target);
     if (ctx->I2c) {
-        /* Couper l'ampli puis remettre la puce a zero */
+        /* Couper l'ampli de classe D puis muter les haut-parleurs */
         (VOID)RtUpdate(ctx, RT5645_PWR_DIG1, 0x0301, 0x0000);
         (VOID)RtWrite(ctx, RT5645_SPK_VOL, 0xc8c8);
     }

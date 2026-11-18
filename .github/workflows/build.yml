@@ -2,6 +2,7 @@ name: build
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -9,12 +10,6 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-
-      - name: Lister les kits Windows
-        shell: pwsh
-        run: |
-          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" | Select-Object Name
-          Test-Path "C:\Program Files (x86)\Windows Kits\10\Include\*\km\wdm.h"
 
       - uses: microsoft/setup-msbuild@v2
 
