@@ -13,11 +13,11 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v2
 
-      - name: Compiler
+      - name: Build
         shell: pwsh
         run: msbuild rt5650buddy.vcxproj /p:Configuration=Release /p:Platform=x64 /v:minimal
 
-      - name: Signer (certificat de test) et creer le catalogue
+      - name: Sign (test certificate) and create catalog
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
