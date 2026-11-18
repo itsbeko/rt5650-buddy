@@ -1,5 +1,5 @@
 ;
-; rt5650buddy.inf - configuration du codec Realtek RT5650 (Acer Chromebase 24 / BUDDY)
+; rt5650buddy.inf - Realtek RT5650 codec configuration (Acer Chromebase 24 / BUDDY)
 ;
 [Version]
 Signature   = "$WINDOWS NT$"

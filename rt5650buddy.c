@@ -1,18 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * rt5650buddy - pilote KMDF minimal pour le codec Realtek RT5650 de l'Acer
- * Chromebase 24 (carte Google BUDDY, Broadwell), sous Windows 10.
+ * rt5650buddy - minimal KMDF driver for the Realtek RT5650 codec of the Acer
+ * Chromebase 24 (Google BUDDY board, Broadwell), on Windows 10.
  *
- * Le transport audio (DSP Intel SST / SSP0) est assure par le pilote CoolStar
- * SST (csaudiosstcatpt), configure en I2S "provider" 2 canaux, MCLK 24 MHz.
- * Ce pilote-ci se contente de configurer le codec par I2C (ACPI \_SB.PCI0.I2C0,
- * adresse 0x1A) : PLL, format I2S esclave, chemin DAC -> haut-parleurs, ampli.
+ * Audio transport (Intel SST DSP / SSP0) is handled by the CoolStar SST
+ * driver (csaudiosstcatpt), configured as 2-channel I2S "provider", 24 MHz MCLK.
+ * This driver only configures the codec over I2C (ACPI \_SB.PCI0.I2C0,
+ * address 0x1A): PLL, I2S slave format, DAC -> speaker path, amplifier.
  *
- * Les valeurs de registres viennent du pilote Linux sound/soc/codecs/rt5645.c
- * (qui gere aussi le RT5650) et de la machine sound/soc/intel/boards/bdw-rt5650.c.
+ * Register values come from the Linux driver sound/soc/codecs/rt5645.c
+ * (which also handles the RT5650) and the sound/soc/intel/boards/bdw-rt5650.c
+ * machine driver.
  *
- * Diagnostic : le resultat est ecrit dans la cle "Device Parameters" du
- * peripherique (valeurs DeviceId, InitStatus, InitStep).
+ * Diagnostics: the result is written to the device's "Device Parameters"
+ * registry key (DeviceId, InitStatus, InitStep values).
  */
 #include <ntddk.h>
 #include <wdf.h>
@@ -22,7 +23,7 @@
 
 #define RT_TAG 'ltRB'
 
-/* Registres (rt5645.h) */
+/* Registers (rt5645.h) */
 #define RT5645_RESET          0x00
 #define RT5645_SPK_VOL        0x01
 #define RT5645_HP_VOL         0x02
@@ -59,7 +60,7 @@ typedef struct _DEVICE_CONTEXT {
     WDFIOTARGET   I2c;
     LARGE_INTEGER ConnectionId;
     BOOLEAN       HaveConnection;
-    ULONG         Step;       /* derniere etape atteinte (diagnostic) */
+    ULONG         Step;       /* last step reached (diagnostics) */
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, GetCtx)
@@ -165,7 +166,7 @@ static NTSTATUS RtCodecInit(WDFDEVICE dev, PDEVICE_CONTEXT ctx)
         goto out;
     }
 
-    /* 2. Reset + sequences d'init (rt5645_i2c_probe) */
+    /* 2. Reset + init sequences (rt5645_i2c_probe) */
     CHK(RtWrite(ctx, RT5645_RESET, 0));
     RtSleepMs(10);
     CHK(RtWrite(ctx, RT5645_AD_DA_MIXER, 0x8080));
@@ -181,7 +182,7 @@ static NTSTATUS RtCodecInit(WDFDEVICE dev, PDEVICE_CONTEXT ctx)
     CHK(RtWrite(ctx, RT5645_IL_CMD3, 0x6728));
     CHK(RtUpdate(ctx, RT5645_CLSD_OUT_CTRL, 0x00c0, 0x00c0));
 
-    /* 3. Bias : OFF -> STANDBY -> ON (rt5645_set_bias_level) */
+    /* 3. Bias: OFF -> STANDBY -> ON (rt5645_set_bias_level) */
     /* VREF1 | MB | BG | VREF2 */
     CHK(RtUpdate(ctx, RT5645_PWR_ANLG1, 0xa810, 0xa810));
     RtSleepMs(10);
@@ -192,36 +193,36 @@ static NTSTATUS RtCodecInit(WDFDEVICE dev, PDEVICE_CONTEXT ctx)
     /* DIG_GATE_CTRL */
     CHK(RtUpdate(ctx, RT5645_GEN_CTRL1, 0x0001, 0x0001));
 
-    /* 4. Horloges : PLL1 <- MCLK 24 MHz -> 24.576 MHz (approx. 24.571), SYSCLK <- PLL1 */
+    /* 4. Clocks: PLL1 <- 24 MHz MCLK -> 24.576 MHz (approx. 24.571), SYSCLK <- PLL1 */
     CHK(RtUpdate(ctx, RT5645_GLB_CLK, 0x3800, 0x0000));     /* PLL1 src = MCLK */
     CHK(RtWrite(ctx, RT5645_PLL_CTRL1, 0x1481));             /* N=41, K=1 */
-    CHK(RtWrite(ctx, RT5645_PLL_CTRL2, 0xc000));             /* M=12, pas de bypass */
+    CHK(RtWrite(ctx, RT5645_PLL_CTRL2, 0xc000));             /* M=12, no bypass */
     CHK(RtUpdate(ctx, RT5645_PWR_ANLG2, 0x0200, 0x0200));    /* PWR_PLL */
     CHK(RtUpdate(ctx, RT5645_GLB_CLK, 0xc000, 0x4000));     /* SYSCLK = PLL1 */
 
-    /* 5. Interface I2S1 : esclave, I2S, 24 bits (RT5650 : DL en [5:4]),
-     *    pre-diviseur 2 (24.576 MHz / (256 * 48 kHz)) */
+    /* 5. I2S1 interface: slave, I2S, 24 bits (RT5650: DL in [5:4]),
+     *    pre-divider 2 (24.576 MHz / (256 * 48 kHz)) */
     CHK(RtUpdate(ctx, RT5645_I2S1_SDP, 0x8000 | 0x0100 | 0x0003 | 0x0030, 0x8000 | 0x0020));
     CHK(RtUpdate(ctx, RT5645_ADDA_CLK1, 0x7000, 0x1000));
 
-    /* 6. Alimentation numerique : I2S1, DAC L1, DAC R1, filtre stereo DAC */
+    /* 6. Digital power: I2S1, DAC L1, DAC R1, stereo DAC filter */
     CHK(RtUpdate(ctx, RT5645_PWR_DIG1, 0x9800, 0x9800));
     CHK(RtUpdate(ctx, RT5645_PWR_DIG2, 0x0800, 0x0800));
 
-    /* 7. Chemin numerique : IF1 DAC -> DAC1 MIX -> (A DAC1 Mux = DAC1) -> DAC L1/R1 */
-    CHK(RtWrite(ctx, RT5645_AD_DA_MIXER, 0x8080));           /* ADC mix coupe, DAC1 actif, src IF1 */
-    CHK(RtUpdate(ctx, RT5645_STO_DAC_MIXER, 0x4040, 0x0000)); /* DAC L1/R1 vers mixeur stereo */
+    /* 7. Digital path: IF1 DAC -> DAC1 MIX -> (A DAC1 Mux = DAC1) -> DAC L1/R1 */
+    CHK(RtWrite(ctx, RT5645_AD_DA_MIXER, 0x8080));           /* ADC mix muted, DAC1 enabled, source IF1 */
+    CHK(RtUpdate(ctx, RT5645_STO_DAC_MIXER, 0x4040, 0x0000)); /* DAC L1/R1 to stereo mixer */
     CHK(RtUpdate(ctx, RT5650_A_DAC_SOUR, 0x000c, 0x0000));    /* A DAC1 L/R <- DAC1 MIX */
 
-    /* 8. Chemin haut-parleurs : DAC L1/R1 -> SPK MIX -> SPKVOL -> SPOL/SPOR MIX -> ampli classe D */
-    CHK(RtWrite(ctx, RT5645_SPK_L_MIXER, 0x003c));           /* DAC L1 seul */
-    CHK(RtWrite(ctx, RT5645_SPK_R_MIXER, 0x003c));           /* DAC R1 seul */
+    /* 8. Speaker path: DAC L1/R1 -> SPK MIX -> SPKVOL -> SPOL/SPOR MIX -> class-D amp */
+    CHK(RtWrite(ctx, RT5645_SPK_L_MIXER, 0x003c));           /* DAC L1 only */
+    CHK(RtWrite(ctx, RT5645_SPK_R_MIXER, 0x003c));           /* DAC R1 only */
     CHK(RtWrite(ctx, RT5645_SPO_MIXER, 0xd806));             /* SPOL<-SPKVOL L, SPOR<-SPKVOL R */
     CHK(RtUpdate(ctx, RT5645_PWR_MIXER, 0x3000, 0x3000));    /* SPK MIX L/R */
     CHK(RtUpdate(ctx, RT5645_PWR_VOL, 0xc000, 0xc000));      /* SPKVOL L/R */
-    CHK(RtWrite(ctx, RT5645_SPK_VOL, 0x0808));               /* non mute, ~0 dB */
+    CHK(RtWrite(ctx, RT5645_SPK_VOL, 0x0808));               /* unmuted, ~0 dB */
 
-    /* 9. Ampli (rt5645_spk_event POST_PMU) : CLS_D | CLS_D_R | CLS_D_L, DET_CLK mode 1 */
+    /* 9. Amplifier (rt5645_spk_event POST_PMU): CLS_D | CLS_D_R | CLS_D_L, DET_CLK mode 1 */
     CHK(RtUpdate(ctx, RT5645_PWR_DIG1, 0x0301, 0x0301));
     CHK(RtUpdate(ctx, RT5645_GEN_CTRL3, 0x0600, 0x0200));
 
@@ -290,8 +291,8 @@ NTSTATUS RtEvtReleaseHardware(WDFDEVICE dev, WDFCMRESLIST trans)
 NTSTATUS RtEvtD0Entry(WDFDEVICE dev, WDF_POWER_DEVICE_STATE prev)
 {
     UNREFERENCED_PARAMETER(prev);
-    /* Ne jamais faire echouer le demarrage du peripherique : on note l'erreur
-     * dans le registre et on laisse Windows continuer. */
+    /* Never fail device start-up: record the error in the registry
+     * and let Windows carry on. */
     (VOID)RtCodecInit(dev, GetCtx(dev));
     return STATUS_SUCCESS;
 }
@@ -301,7 +302,7 @@ NTSTATUS RtEvtD0Exit(WDFDEVICE dev, WDF_POWER_DEVICE_STATE target)
     PDEVICE_CONTEXT ctx = GetCtx(dev);
     UNREFERENCED_PARAMETER(target);
     if (ctx->I2c) {
-        /* Couper l'ampli de classe D puis muter les haut-parleurs */
+        /* Turn off the class-D amp, then mute the speakers */
         (VOID)RtUpdate(ctx, RT5645_PWR_DIG1, 0x0301, 0x0000);
         (VOID)RtWrite(ctx, RT5645_SPK_VOL, 0xc8c8);
     }
